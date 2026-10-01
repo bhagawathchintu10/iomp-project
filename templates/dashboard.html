@@ -1,0 +1,1094 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>Intelligent Spacecraft Monitoring</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet"/>
+
+<style>
+:root {
+  --bg:        #03060f;
+  --panel:     #080d1a;
+  --border:    #0ff;
+  --accent:    #00fff7;
+  --warn:      #ffb300;
+  --danger:    #ff2244;
+  --normal:    #00e676;
+  --text:      #c8eeff;
+  --dim:       #3a5a6a;
+  --glow:      0 0 12px #0ff8, 0 0 30px #0ff3;
+  --font-hud:  'Orbitron', monospace;
+  --font-mono: 'Share Tech Mono', monospace;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-mono);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ── Star field background ───────────────────────────── */
+body::before {
+  content: '';
+  position: fixed; inset: 0; z-index: -1;
+  background-image:
+    radial-gradient(1px 1px at 10% 20%, #fff 0%, transparent 100%),
+    radial-gradient(1px 1px at 30% 60%, #aef 0%, transparent 100%),
+    radial-gradient(1px 1px at 55% 15%, #fff 0%, transparent 100%),
+    radial-gradient(1px 1px at 75% 80%, #aef 0%, transparent 100%),
+    radial-gradient(1px 1px at 90% 40%, #fff 0%, transparent 100%),
+    radial-gradient(1px 1px at 20% 90%, #fff 0%, transparent 100%),
+    radial-gradient(1px 1px at 65% 50%, #aef 0%, transparent 100%),
+    radial-gradient(1px 1px at 40% 35%, #fff 0%, transparent 100%),
+    radial-gradient(1px 1px at 85% 10%, #fff 0%, transparent 100%),
+    radial-gradient(2px 2px at 50% 70%, #0ff 0%, transparent 100%);
+  opacity: 0.6;
+}
+
+/* ── Header ──────────────────────────────────────────── */
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 32px;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(90deg, #000c1a 0%, #030f22 100%);
+  box-shadow: var(--glow);
+  position: sticky; top: 0; z-index: 100;
+}
+
+.header-title {
+  font-family: var(--font-hud);
+  font-size: 1.3rem;
+  font-weight: 900;
+  letter-spacing: 4px;
+  color: var(--accent);
+  text-shadow: var(--glow);
+}
+
+.header-logo { font-size: 1.8rem; }
+
+.header-time {
+  font-size: 0.85rem;
+  color: var(--dim);
+  letter-spacing: 2px;
+}
+
+/* ── Layout ──────────────────────────────────────────── */
+.main-grid {
+  display: grid;
+  grid-template-columns: 280px 1fr 280px;
+  gap: 0;
+  min-height: calc(100vh - 62px);
+}
+
+/* ── Sidebar panels ──────────────────────────────────── */
+.sidebar {
+  background: var(--panel);
+  border-right: 1px solid #0ff2;
+  padding: 20px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.sidebar.right { border-left: 1px solid #0ff2; border-right: none; }
+
+.section-label {
+  font-family: var(--font-hud);
+  font-size: 0.6rem;
+  letter-spacing: 3px;
+  color: var(--dim);
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+/* ── Telemetry cards ─────────────────────────────────── */
+.telem-card {
+  background: #050c1a;
+  border: 1px solid #0ff3;
+  border-radius: 6px;
+  padding: 12px 14px;
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.3s;
+}
+
+.telem-card::before {
+  content: '';
+  position: absolute; left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: var(--accent);
+  transition: background 0.3s;
+}
+
+.telem-card.warn::before  { background: var(--warn); }
+.telem-card.danger::before{ background: var(--danger); }
+
+.telem-label {
+  font-size: 0.65rem;
+  letter-spacing: 2px;
+  color: var(--dim);
+  text-transform: uppercase;
+}
+
+.telem-value {
+  font-family: var(--font-hud);
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--accent);
+  line-height: 1.2;
+  transition: color 0.3s;
+}
+
+.telem-card.warn  .telem-value { color: var(--warn); }
+.telem-card.danger .telem-value { color: var(--danger); }
+
+.telem-unit {
+  font-size: 0.7rem;
+  color: var(--dim);
+}
+
+.telem-bar {
+  height: 3px;
+  background: #0ff1;
+  border-radius: 2px;
+  margin-top: 8px;
+  overflow: hidden;
+}
+
+.telem-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width 0.5s ease, background 0.3s;
+}
+
+/* ── Prediction card ─────────────────────────────────── */
+.predict-card {
+  background: #050c1a;
+  border: 1px solid #ffb30033;
+  border-radius: 6px;
+  padding: 10px 12px;
+}
+
+.predict-title {
+  font-family: var(--font-hud);
+  font-size: 0.55rem;
+  letter-spacing: 2px;
+  color: var(--warn);
+  margin-bottom: 6px;
+}
+
+.predict-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.7rem;
+  padding: 2px 0;
+  border-bottom: 1px solid #ffffff08;
+}
+
+.predict-key  { color: var(--dim); }
+.predict-val  { color: var(--warn); font-family: var(--font-hud); }
+
+/* ── Status badge ────────────────────────────────────── */
+.status-badge {
+  font-family: var(--font-hud);
+  font-size: 1.1rem;
+  font-weight: 900;
+  letter-spacing: 3px;
+  text-align: center;
+  padding: 12px;
+  border-radius: 6px;
+  border: 2px solid;
+  animation: pulse 2s infinite;
+}
+
+.status-badge.NORMAL   { color: var(--normal); border-color: var(--normal); background: #00e67610; }
+.status-badge.THRESHOLD{ color: var(--warn);   border-color: var(--warn);   background: #ffb30010; animation: pulse-warn 1s infinite; }
+.status-badge.ANOMALY  { color: var(--danger); border-color: var(--danger); background: #ff224410; animation: pulse-danger 0.5s infinite; }
+
+@keyframes pulse        { 0%,100%{opacity:1} 50%{opacity:.7} }
+@keyframes pulse-warn   { 0%,100%{opacity:1} 50%{opacity:.5} }
+@keyframes pulse-danger { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+/* ── Mode display ────────────────────────────────────── */
+.mode-display {
+  font-family: var(--font-hud);
+  font-size: 0.7rem;
+  letter-spacing: 2px;
+  text-align: center;
+  color: var(--dim);
+  padding: 6px;
+  border: 1px solid #0ff2;
+  border-radius: 4px;
+}
+
+/* ── Simulation running status ───────────────────────── */
+.sim-status {
+  font-family: var(--font-hud);
+  font-size: 0.65rem;
+  text-align: center;
+  letter-spacing: 2px;
+  padding: 6px;
+  border-radius: 4px;
+}
+
+.sim-status.running  { color: var(--normal); background: #00e67610; }
+.sim-status.stopped  { color: var(--danger); background: #ff224410; }
+
+.btn-export {
+  color: var(--accent); border-color: var(--accent);
+  grid-column: span 2; width: 100%; margin-top: 4px;
+  font-family: var(--font-hud);
+  font-size: 0.6rem; letter-spacing: 2px;
+  padding: 10px 6px; border-radius: 4px; border: 1px solid;
+  cursor: pointer; background: transparent;
+  transition: all 0.2s; text-transform: uppercase;
+}
+.btn-export:hover { background: var(--accent); color: #000; transform: translateY(-1px); }
+.btn-export:active { transform: translateY(0); }
+
+/* ── Control buttons ─────────────────────────────────── */
+.btn-group {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.btn {
+  font-family: var(--font-hud);
+  font-size: 0.6rem;
+  letter-spacing: 2px;
+  padding: 10px 6px;
+  border-radius: 4px;
+  border: 1px solid;
+  cursor: pointer;
+  background: transparent;
+  transition: all 0.2s;
+  text-transform: uppercase;
+}
+
+.btn:hover { filter: brightness(1.4); transform: translateY(-1px); }
+.btn:active { transform: translateY(0); }
+
+.btn-start  { color: var(--normal); border-color: var(--normal); }
+.btn-stop   { color: var(--danger); border-color: var(--danger); }
+.btn-reset  { color: var(--warn);   border-color: var(--warn);   grid-column: span 2; }
+.btn-mode   { color: var(--accent); border-color: var(--accent); grid-column: span 2; }
+
+/* ── Center: Simulation + Charts ─────────────────────── */
+.center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px;
+  gap: 24px;
+}
+
+/* ── 3D Simulation canvas wrapper ────────────────────── */
+#simulation {
+  width: 100%;
+  max-width: 780px;
+  aspect-ratio: 16/9;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: var(--glow), inset 0 0 40px #0001;
+  position: relative;
+  background: #000;
+}
+
+#simulation canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.sim-overlay {
+  position: absolute;
+  top: 10px; left: 10px;
+  font-family: var(--font-hud);
+  font-size: 0.6rem;
+  color: var(--accent);
+  letter-spacing: 2px;
+  pointer-events: none;
+}
+
+.sim-overlay-right {
+  position: absolute;
+  top: 10px; right: 10px;
+  font-size: 0.6rem;
+  color: var(--dim);
+  letter-spacing: 1px;
+  pointer-events: none;
+}
+
+/* ── Charts grid ─────────────────────────────────────── */
+.charts-section {
+  width: 100%;
+  max-width: 780px;
+}
+
+.charts-section-title {
+  font-family: var(--font-hud);
+  font-size: 0.65rem;
+  letter-spacing: 3px;
+  color: var(--dim);
+  margin-bottom: 16px;
+  text-align: center;
+}
+
+.charts-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.chart-wrapper {
+  background: #060d1c;
+  border: 1px solid #0ff2;
+  border-radius: 6px;
+  padding: 14px;
+  position: relative;
+}
+
+.chart-wrapper canvas {
+  width: 100% !important;
+  height: 160px !important;
+}
+
+.chart-label {
+  font-family: var(--font-hud);
+  font-size: 0.55rem;
+  letter-spacing: 2px;
+  color: var(--dim);
+  margin-bottom: 8px;
+}
+
+/* ── Log panel ───────────────────────────────────────── */
+.log-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.log-list::-webkit-scrollbar { width: 3px; }
+.log-list::-webkit-scrollbar-thumb { background: var(--dim); }
+
+.log-item {
+  font-size: 0.65rem;
+  color: var(--dim);
+  padding: 3px 0;
+  border-bottom: 1px solid #ffffff06;
+}
+
+.log-item .log-time { color: #0ff6; margin-right: 6px; }
+.log-item.log-warn    { color: var(--warn); }
+.log-item.log-danger  { color: var(--danger); }
+.log-item.log-ok      { color: var(--normal); }
+
+/* ── Scrollbar ───────────────────────────────────────── */
+::-webkit-scrollbar       { width: 4px; }
+::-webkit-scrollbar-track { background: #000; }
+::-webkit-scrollbar-thumb { background: var(--dim); border-radius: 2px; }
+
+/* ── Auto-event alert banner ─────────────────────────── */
+#alertBanner {
+  display: none;
+  position: fixed;
+  top: 70px; left: 50%; transform: translateX(-50%);
+  z-index: 999;
+  min-width: 360px;
+  padding: 14px 24px;
+  border-radius: 8px;
+  border: 2px solid;
+  font-family: var(--font-hud);
+  text-align: center;
+  animation: slideDown 0.3s ease;
+  backdrop-filter: blur(8px);
+}
+#alertBanner.visible { display: block; }
+#alertBanner.danger  { color: var(--danger); border-color: var(--danger); background: #1a000a; box-shadow: 0 0 30px #ff224466; }
+#alertBanner.ok      { color: var(--normal); border-color: var(--normal); background: #001a08; box-shadow: 0 0 30px #00e67666; }
+#alertTitle   { font-size: 1rem; font-weight: 900; letter-spacing: 3px; margin-bottom: 4px; }
+#alertMessage { font-size: 0.7rem; letter-spacing: 1px; opacity: 0.85; }
+@keyframes slideDown { from { opacity:0; transform: translateX(-50%) translateY(-16px); } to { opacity:1; transform: translateX(-50%) translateY(0); } }
+
+/* ── Paused overlay ──────────────────────────────────── */
+#pausedOverlay {
+  display: none;
+  position: absolute; inset: 0;
+  background: #000a;
+  z-index: 10;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-hud);
+  font-size: 2rem;
+  color: var(--danger);
+  letter-spacing: 6px;
+  animation: pulse-danger 1s infinite;
+}
+
+#pausedOverlay.visible { display: flex; }
+
+/* ── Responsive ──────────────────────────────────────── */
+@media (max-width: 1100px) {
+  .main-grid { grid-template-columns: 220px 1fr; }
+  .sidebar.right { display: none; }
+}
+@media (max-width: 700px) {
+  .main-grid { grid-template-columns: 1fr; }
+  .sidebar   { display: none; }
+  .charts-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+
+<body>
+
+<!-- ── AUTO-EVENT ALERT BANNER ────────────────────────── -->
+<div id="alertBanner">
+  <div id="alertTitle">—</div>
+  <div id="alertMessage">—</div>
+</div>
+
+<!-- ── HEADER ─────────────────────────────────────────── -->
+<header>
+  <div class="header-logo">🛰️</div>
+  <div class="header-title">INTELLIGENT SPACECRAFT MONITORING</div>
+  <div class="header-time" id="clock">—</div>
+</header>
+
+<!-- ── MAIN GRID ──────────────────────────────────────── -->
+<div class="main-grid">
+
+  <!-- LEFT SIDEBAR: Telemetry values -->
+  <aside class="sidebar">
+    <div class="section-label">Live Telemetry</div>
+
+    <div class="telem-card" id="card-fuel">
+      <div class="telem-label">Fuel</div>
+      <div><span class="telem-value" id="fuelVal">—</span><span class="telem-unit"> %</span></div>
+      <div class="telem-bar"><div class="telem-bar-fill" id="bar-fuel" style="width:100%"></div></div>
+    </div>
+
+    <div class="telem-card" id="card-temp">
+      <div class="telem-label">Temperature</div>
+      <div><span class="telem-value" id="tempVal">—</span><span class="telem-unit"> °C</span></div>
+      <div class="telem-bar"><div class="telem-bar-fill" id="bar-temp" style="width:50%"></div></div>
+    </div>
+
+    <div class="telem-card" id="card-voltage">
+      <div class="telem-label">Voltage</div>
+      <div><span class="telem-value" id="voltageVal">—</span><span class="telem-unit"> V</span></div>
+      <div class="telem-bar"><div class="telem-bar-fill" id="bar-voltage" style="width:80%"></div></div>
+    </div>
+
+    <div class="telem-card" id="card-battery">
+      <div class="telem-label">Battery</div>
+      <div><span class="telem-value" id="batteryVal">—</span><span class="telem-unit"> %</span></div>
+      <div class="telem-bar"><div class="telem-bar-fill" id="bar-battery" style="width:100%"></div></div>
+    </div>
+
+    <div class="telem-card" id="card-deviation">
+      <div class="telem-label">Orbital Deviation</div>
+      <div><span class="telem-value" id="deviationVal">—</span><span class="telem-unit"> deg</span></div>
+      <div class="telem-bar"><div class="telem-bar-fill" id="bar-deviation" style="width:10%"></div></div>
+    </div>
+
+    <div class="telem-card" id="card-radiation">
+      <div class="telem-label">Radiation</div>
+      <div><span class="telem-value" id="radiationVal">—</span><span class="telem-unit"> mSv</span></div>
+      <div class="telem-bar"><div class="telem-bar-fill" id="bar-radiation" style="width:20%"></div></div>
+    </div>
+
+    <div class="telem-card" id="card-oxygen">
+      <div class="telem-label">Oxygen</div>
+      <div><span class="telem-value" id="oxygenVal">—</span><span class="telem-unit"> %</span></div>
+      <div class="telem-bar"><div class="telem-bar-fill" id="bar-oxygen" style="width:100%"></div></div>
+    </div>
+
+    <button class="btn btn-export" onclick="exportCSV()" title="Export live telemetry data to CSV">
+      ⬇ EXPORT DATA
+    </button>
+  </aside>
+
+  <!-- CENTER: Simulation + Charts -->
+  <main class="center">
+
+    <!-- 3D Simulation -->
+    <div id="simulation">
+      <div class="sim-overlay">🛰 ORBIT SIM v2.0</div>
+      <div class="sim-overlay-right" id="simRunLabel">● RUNNING</div>
+      <div id="pausedOverlay">⏸ PAUSED</div>
+    </div>
+
+    <!-- Charts -->
+    <div class="charts-section">
+      <div class="charts-section-title">── TELEMETRY HISTORY ──</div>
+      <div class="charts-grid">
+        <div class="chart-wrapper">
+          <div class="chart-label">FUEL (%)</div>
+          <canvas id="chart-fuel"></canvas>
+        </div>
+        <div class="chart-wrapper">
+          <div class="chart-label">TEMPERATURE (°C)</div>
+          <canvas id="chart-temp"></canvas>
+        </div>
+        <div class="chart-wrapper">
+          <div class="chart-label">VOLTAGE (V)</div>
+          <canvas id="chart-voltage"></canvas>
+        </div>
+        <div class="chart-wrapper">
+          <div class="chart-label">BATTERY (%)</div>
+          <canvas id="chart-battery"></canvas>
+        </div>
+        <div class="chart-wrapper">
+          <div class="chart-label">ORBITAL DEVIATION</div>
+          <canvas id="chart-deviation"></canvas>
+        </div>
+        <div class="chart-wrapper">
+          <div class="chart-label">RADIATION (mSv)</div>
+          <canvas id="chart-radiation"></canvas>
+        </div>
+        <div class="chart-wrapper" style="grid-column:span 2;">
+          <div class="chart-label">OXYGEN (%)</div>
+          <canvas id="chart-oxygen"></canvas>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- RIGHT SIDEBAR: Controls + Predictions + Log -->
+  <aside class="sidebar right">
+
+    <div class="section-label">System Status</div>
+    <div class="status-badge NORMAL" id="statusBadge">NORMAL</div>
+    <div class="mode-display" id="modeDisplay">MODE: AUTOMATIC</div>
+    <div class="sim-status running" id="simStatusLabel">● SIMULATION RUNNING</div>
+
+    <div class="section-label">Controls</div>
+    <div class="btn-group">
+      <button class="btn btn-start"  onclick="startSim()">▶ START</button>
+      <button class="btn btn-stop"   onclick="stopSim()">⏸ STOP</button>
+      <button class="btn btn-reset"  onclick="resetSim()">↺ RESET MISSION</button>
+      <button class="btn btn-mode"   onclick="switchMode()">⇄ TOGGLE MODE</button>
+    </div>
+
+    <div class="section-label">AI Prediction (next cycle)</div>
+    <div class="predict-card">
+      <div class="predict-title">▲ FORECAST</div>
+      <div class="predict-row"><span class="predict-key">Fuel</span>     <span class="predict-val" id="p-fuel">—</span></div>
+      <div class="predict-row"><span class="predict-key">Temp</span>     <span class="predict-val" id="p-temp">—</span></div>
+      <div class="predict-row"><span class="predict-key">Voltage</span>  <span class="predict-val" id="p-voltage">—</span></div>
+      <div class="predict-row"><span class="predict-key">Battery</span>  <span class="predict-val" id="p-battery">—</span></div>
+      <div class="predict-row"><span class="predict-key">Deviation</span><span class="predict-val" id="p-deviation">—</span></div>
+      <div class="predict-row"><span class="predict-key">Radiation</span><span class="predict-val" id="p-radiation">—</span></div>
+      <div class="predict-row"><span class="predict-key">Oxygen</span>   <span class="predict-val" id="p-oxygen">—</span></div>
+    </div>
+
+    <div class="section-label">Mission Log</div>
+    <ul class="log-list" id="logList"></ul>
+
+  </aside>
+</div>
+
+<!-- ════════════════════════════════════════════════════ -->
+<script>
+/* ── Clock ──────────────────────────────────────────── */
+function updateClock(){
+  document.getElementById('clock').textContent = new Date().toUTCString().slice(0,25)+' UTC';
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+/* ── Three.js Simulation ────────────────────────────── */
+(function(){
+  const container = document.getElementById('simulation');
+  const w = container.clientWidth  || 780;
+  const h = container.clientHeight || 440;
+
+  const scene    = new THREE.Scene();
+  const camera   = new THREE.PerspectiveCamera(60, w/h, 0.1, 1000);
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+
+  renderer.setSize(w, h);
+  renderer.setPixelRatio(window.devicePixelRatio);
+  container.appendChild(renderer.domElement);
+
+  /* Resize */
+  window.addEventListener('resize', () => {
+    const nw = container.clientWidth;
+    const nh = container.clientHeight;
+    camera.aspect = nw / nh;
+    camera.updateProjectionMatrix();
+    renderer.setSize(nw, nh);
+  });
+
+  /* Lights */
+  scene.add(new THREE.AmbientLight(0x224466, 1.5));
+  const sun = new THREE.PointLight(0xfff8e1, 2.5, 200);
+  sun.position.set(20, 10, 15);
+  scene.add(sun);
+
+  /* Stars */
+  const starGeo = new THREE.BufferGeometry();
+  const starPositions = [];
+  for(let i = 0; i < 1500; i++){
+    starPositions.push(
+      (Math.random()-0.5)*400,
+      (Math.random()-0.5)*400,
+      (Math.random()-0.5)*400
+    );
+  }
+  starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starPositions, 3));
+  scene.add(new THREE.Points(starGeo, new THREE.PointsMaterial({ color:0xffffff, size:0.4, transparent:true, opacity:0.8 })));
+
+  /* Earth */
+  const loader    = new THREE.TextureLoader();
+  const earthMat  = new THREE.MeshStandardMaterial({ color: 0x1a4a8a });
+  const earth     = new THREE.Mesh(new THREE.SphereGeometry(5, 64, 64), earthMat);
+  scene.add(earth);
+
+  /* Try to load earth texture */
+  loader.load('/static/textures/earth.jpg',
+    tex => { earthMat.map = tex; earthMat.needsUpdate = true; },
+    undefined,
+    () => { /* texture not found – use solid color */ }
+  );
+
+  /* Atmosphere glow ring */
+  const atmGeo = new THREE.SphereGeometry(5.2, 64, 64);
+  const atmMat = new THREE.MeshStandardMaterial({
+    color: 0x4488ff, transparent: true, opacity: 0.08, side: THREE.BackSide
+  });
+  scene.add(new THREE.Mesh(atmGeo, atmMat));
+
+  /* Orbit ring */
+  const orbitRing = new THREE.Mesh(
+    new THREE.RingGeometry(9.9, 10.1, 128),
+    new THREE.MeshBasicMaterial({ color: 0x00ffff, side: THREE.DoubleSide, transparent: true, opacity: 0.25 })
+  );
+  orbitRing.rotation.x = Math.PI / 2;
+  scene.add(orbitRing);
+
+  /* Spacecraft: body (box) + wings (planes) */
+  const craftGroup = new THREE.Group();
+
+  // body
+  const body = new THREE.Mesh(
+    new THREE.BoxGeometry(0.6, 0.4, 1.2),
+    new THREE.MeshStandardMaterial({ color: 0xe0e8ff, metalness: 0.8, roughness: 0.2 })
+  );
+  craftGroup.add(body);
+
+  // solar panels
+  const panelMat = new THREE.MeshStandardMaterial({ color: 0x223366, metalness: 0.6, roughness: 0.4 });
+  [-1, 1].forEach(side => {
+    const panel = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.04, 0.5), panelMat);
+    panel.position.set(side * 1.1, 0, 0);
+    craftGroup.add(panel);
+  });
+
+  // antenna
+  const ant = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.02, 0.02, 0.8, 8),
+    new THREE.MeshStandardMaterial({ color: 0xffffff })
+  );
+  ant.position.set(0, 0.4, -0.2);
+  craftGroup.add(ant);
+
+  // thruster glow
+  const thrusterGeo = new THREE.ConeGeometry(0.12, 0.3, 16);
+  const thrusterMat = new THREE.MeshBasicMaterial({ color: 0x00aaff, transparent: true, opacity: 0.6 });
+  const thruster = new THREE.Mesh(thrusterGeo, thrusterMat);
+  thruster.position.set(0, 0, 0.75);
+  thruster.rotation.x = Math.PI / 2;
+  craftGroup.add(thruster);
+
+  scene.add(craftGroup);
+
+  /* Camera position */
+  camera.position.set(0, 18, 8);
+  camera.lookAt(0, 0, 0);
+
+  /* Animation */
+  let angle = 0;
+  let simRunning = true;
+
+  window.setSimRunning = function(v){ simRunning = v; };
+  window.resetOrbit   = function(){ angle = 0; };
+
+  function animate(){
+    requestAnimationFrame(animate);
+    earth.rotation.y += 0.001;
+
+    if(simRunning){
+      angle += 0.008;
+      craftGroup.position.x = 10 * Math.cos(angle);
+      craftGroup.position.z = 10 * Math.sin(angle);
+      craftGroup.position.y = Math.sin(angle * 0.3) * 0.5;
+
+      // orient spacecraft along orbit
+      craftGroup.rotation.y = -angle + Math.PI / 2;
+
+      // thruster pulse
+      thruster.material.opacity = 0.4 + Math.sin(Date.now()*0.01)*0.3;
+    }
+
+    renderer.render(scene, camera);
+  }
+  animate();
+})();
+
+/* ══════════════════════════════════════════════════════
+   CHART SETUP
+══════════════════════════════════════════════════════ */
+const CHART_COLORS = {
+  fuel:'#00e676', temp:'#ff5252', voltage:'#ffeb3b',
+  battery:'#40c4ff', deviation:'#ff9100', radiation:'#ea80fc', oxygen:'#18ffff'
+};
+const MAX_POINTS = 40;
+const charts = {};
+
+function makeChart(key){
+  const ctx = document.getElementById('chart-' + key);
+  if(!ctx) return;
+  charts[key] = new Chart(ctx, {
+    type: 'line',
+    data: { labels:[], datasets:[{ label:key, data:[],
+      borderColor: CHART_COLORS[key]||'#0ff',
+      backgroundColor:(CHART_COLORS[key]||'#0ff')+'18',
+      fill:true, tension:0.4, pointRadius:0, borderWidth:1.5 }]},
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      animation:{ duration:300 },
+      plugins:{ legend:{ display:false } },
+      scales:{
+        x:{ display:false },
+        y:{ ticks:{ color:'#3a5a6a', font:{ size:10, family:"'Share Tech Mono',monospace" } },
+            grid:{ color:'#ffffff08' } }
+      }
+    }
+  });
+}
+['fuel','temp','voltage','battery','deviation','radiation','oxygen'].forEach(makeChart);
+
+function pushChart(key, value){
+  const c = charts[key];
+  if(!c || value === undefined || value === null) return;
+  c.data.labels.push(new Date().toLocaleTimeString());
+  c.data.datasets[0].data.push(+parseFloat(value).toFixed(3));
+  if(c.data.labels.length > MAX_POINTS){ c.data.labels.shift(); c.data.datasets[0].data.shift(); }
+  c.update('none');
+}
+
+function clearAllCharts(){
+  Object.values(charts).forEach(c => {
+    c.data.labels = [];
+    c.data.datasets[0].data = [];
+    c.update('none');
+  });
+}
+
+/* ══════════════════════════════════════════════════════
+   TELEMETRY CARD UPDATER
+   HTML IDs must be: fuelVal, tempVal, voltageVal,
+   batteryVal, deviationVal, radiationVal, oxygenVal
+   Bars: bar-fuel, bar-temp, bar-voltage, bar-battery,
+         bar-deviation, bar-radiation, bar-oxygen
+══════════════════════════════════════════════════════ */
+function setCard(key, value){
+  if(value === undefined || value === null || isNaN(value)) return;
+
+  /* Update value text */
+  const el = document.getElementById(key + 'Val');
+  if(el) el.textContent = parseFloat(value).toFixed(key === 'deviation' ? 3 : 2);
+
+  /* Update bar width */
+  const bar = document.getElementById('bar-' + key);
+  if(bar){
+    const ranges = { fuel:[0,100], battery:[0,100], oxygen:[0,100],
+                     temp:[0,60], voltage:[0,35], deviation:[0,2], radiation:[0,15] };
+    const r = ranges[key] || [0,100];
+    const pct = Math.min(Math.max((value - r[0]) / (r[1] - r[0]) * 100, 0), 100);
+    bar.style.width = pct + '%';
+    /* Color: red/yellow for rising-bad metrics, red for depleting ones */
+    const rising = key==='temp' || key==='radiation' || key==='deviation';
+    bar.style.background =
+      rising  ? (pct>70?'var(--danger)': pct>45?'var(--warn)':'var(--accent)') :
+                (pct<15?'var(--danger)': pct<35?'var(--warn)':'var(--accent)');
+  }
+
+  /* Card border colour */
+  const card = document.getElementById('card-' + key);
+  if(card){
+    card.classList.remove('warn','danger');
+    const w = { temp:38, radiation:6, deviation:1, fuel:20, battery:20, oxygen:30 };
+    const d = { temp:45, radiation:10, deviation:1.5, fuel:10, battery:10, oxygen:15 };
+    const rising = key==='temp'||key==='radiation'||key==='deviation';
+    if(rising  && value > (d[key]||Infinity)) card.classList.add('danger');
+    else if(rising  && value > (w[key]||Infinity)) card.classList.add('warn');
+    else if(!rising && value < (d[key]||0))        card.classList.add('danger');
+    else if(!rising && value < (w[key]||0))        card.classList.add('warn');
+  }
+}
+
+function updateAllCards(t){
+  setCard('fuel',      t.fuel);
+  setCard('temp',      t.temp);
+  setCard('voltage',   t.voltage);
+  setCard('battery',   t.battery);
+  setCard('deviation', t.deviation);
+  setCard('radiation', t.radiation);
+  setCard('oxygen',    t.oxygen);
+}
+
+/* ══════════════════════════════════════════════════════
+   MISSION LOG
+══════════════════════════════════════════════════════ */
+let lastStatus = 'NORMAL';
+function addLog(msg, type){
+  const ul = document.getElementById('logList');
+  if(!ul) return;
+  const li = document.createElement('li');
+  li.className = 'log-item' + (type ? ' log-'+type : '');
+  const ts = document.createElement('span');
+  ts.className = 'log-time';
+  ts.textContent = new Date().toLocaleTimeString();
+  li.appendChild(ts);
+  li.appendChild(document.createTextNode(msg));
+  ul.prepend(li);
+  while(ul.children.length > 30) ul.removeChild(ul.lastChild);
+}
+
+/* ══════════════════════════════════════════════════════
+   STATUS BADGE
+══════════════════════════════════════════════════════ */
+function updateStatus(s){
+  const badge = document.getElementById('statusBadge');
+  if(!badge) return;
+  badge.textContent = s;
+  badge.className   = 'status-badge ' + s;
+  if(s !== lastStatus){
+    const t = s==='NORMAL'?'ok': s==='THRESHOLD'?'warn':'danger';
+    addLog('Status → ' + s, t);
+    lastStatus = s;
+  }
+}
+
+/* ══════════════════════════════════════════════════════
+   SIM UI (overlay + labels)
+══════════════════════════════════════════════════════ */
+function updateSimUI(running){
+  const overlay = document.getElementById('pausedOverlay');
+  const label   = document.getElementById('simRunLabel');
+  const badge   = document.getElementById('simStatusLabel');
+  if(overlay) overlay.classList.toggle('visible', !running);
+  if(label){
+    label.textContent = running ? '● RUNNING' : '⏸ PAUSED';
+    label.style.color = running ? 'var(--normal)' : 'var(--danger)';
+  }
+  if(badge){
+    badge.textContent = running ? '● SIMULATION RUNNING' : '⏸ SIMULATION STOPPED';
+    badge.className   = 'sim-status ' + (running ? 'running' : 'stopped');
+  }
+  if(typeof window.setSimRunning === 'function') window.setSimRunning(running);
+}
+
+/* ══════════════════════════════════════════════════════
+   ALERT BANNER
+══════════════════════════════════════════════════════ */
+let alertTimer = null;
+function showAlert(title, message, type){
+  const b = document.getElementById('alertBanner');
+  if(!b) return;
+  document.getElementById('alertTitle').textContent   = title;
+  document.getElementById('alertMessage').textContent = message;
+  b.className = 'visible ' + type;
+  if(alertTimer) clearTimeout(alertTimer);
+  alertTimer = setTimeout(() => { b.className = ''; }, 5000);
+}
+
+/* ══════════════════════════════════════════════════════
+   CONTROLS
+   simPaused  = frontend freeze flag
+   resetPending = true for 2 poll cycles after reset
+                  so stale server responses don't re-pause
+══════════════════════════════════════════════════════ */
+let simPaused    = false;
+let resetPending = 0;   // countdown: ignore server running=false for N polls
+
+function startSim(){
+  simPaused = false;
+  updateSimUI(true);
+  addLog('Simulation STARTED', 'ok');
+  fetch('/start').catch(() => addLog('Server error on start', 'danger'));
+}
+
+function stopSim(){
+  simPaused = true;
+  updateSimUI(false);
+  addLog('Simulation STOPPED', 'warn');
+  fetch('/stop').catch(() => addLog('Server error on stop', 'danger'));
+}
+
+function resetSim(){
+  simPaused    = false;
+  resetPending = 3;           // ignore next 3 server responses
+  updateSimUI(true);
+  if(typeof window.resetOrbit    === 'function') window.resetOrbit();
+  if(typeof window.setSimRunning === 'function') window.setSimRunning(true);
+
+  clearAllCharts();
+
+  /* Reset cards to initial mission values */
+  const init = {fuel:100,temp:25,voltage:28,battery:100,deviation:0.1,radiation:2,oxygen:100};
+  updateAllCards(init);
+
+  /* Reset predictions */
+  ['fuel','temp','voltage','battery','deviation','radiation','oxygen'].forEach(k => {
+    const el = document.getElementById('p-'+k);
+    if(el) el.textContent = '—';
+  });
+
+  /* Reset status + log */
+  lastStatus = '';
+  updateStatus('NORMAL');
+  const ul = document.getElementById('logList');
+  if(ul) ul.innerHTML = '';
+  addLog('Mission RESET — T+0', 'ok');
+  addLog('All systems nominal', 'ok');
+
+  fetch('/reset').catch(() => addLog('Server error on reset', 'danger'));
+}
+
+function switchMode(){
+  fetch('/toggle_mode').then(r=>r.json()).then(d=>{
+    const el = document.getElementById('modeDisplay');
+    if(el) el.textContent = 'MODE: ' + d.mode;
+    addLog('Mode → ' + d.mode, '');
+  });
+}
+
+/* ══════════════════════════════════════════════════════
+   CSV EXPORT
+══════════════════════════════════════════════════════ */
+const telemetryLog = [];  // accumulates every live data point
+
+function logTelemetry(t, status){
+  telemetryLog.push({
+    timestamp:  new Date().toISOString(),
+    fuel:       t.fuel.toFixed(2),
+    temp:       t.temp.toFixed(2),
+    voltage:    t.voltage.toFixed(2),
+    battery:    t.battery.toFixed(2),
+    deviation:  t.deviation.toFixed(3),
+    radiation:  t.radiation.toFixed(2),
+    oxygen:     t.oxygen.toFixed(2),
+    status:     status
+  });
+}
+
+function exportCSV(){
+  if(telemetryLog.length === 0){
+    addLog('No data to export yet', 'warn');
+    return;
+  }
+  const headers = ['timestamp','fuel','temp','voltage','battery','deviation','radiation','oxygen','status'];
+  const rows    = telemetryLog.map(r => headers.map(h => r[h]).join(','));
+  const csv     = [headers.join(','), ...rows].join('\n');
+  const blob    = new Blob([csv], { type: 'text/csv' });
+  const url     = URL.createObjectURL(blob);
+  const a       = document.createElement('a');
+  a.href        = url;
+  a.download    = 'telemetry_' + new Date().toISOString().slice(0,19).replace(/[:T]/g,'-') + '.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+  addLog('Exported ' + telemetryLog.length + ' rows to CSV', 'ok');
+}
+
+/* ══════════════════════════════════════════════════════
+   MAIN POLL LOOP
+══════════════════════════════════════════════════════ */
+let firstPoll = true;
+
+function poll(){
+  fetch('/telemetry')
+    .then(r => r.json())
+    .then(data => {
+      if(firstPoll){
+        addLog('Connection established', 'ok');
+        addLog('Telemetry feed active', 'ok');
+        firstPoll = false;
+      }
+
+      /* Countdown the reset protection window */
+      if(resetPending > 0){ resetPending--; return; }
+
+      const t = data.telemetry;
+
+      /* ── Auto-stop on anomaly ──────────────────────── */
+      if(data.auto_event === 'auto_stopped' && !simPaused){
+        simPaused = true;
+        updateSimUI(false);
+        addLog('⚠ ANOMALY — auto-stopped, cooling down…', 'danger');
+        showAlert('ANOMALY DETECTED', '⚠ Systems halted. Cooling down automatically.', 'danger');
+      }
+
+      /* ── Auto-start on recovery ────────────────────── */
+      if(data.auto_event === 'auto_started' && simPaused){
+        simPaused = false;
+        updateSimUI(true);
+        addLog('✔ Recovered — simulation auto-resumed', 'ok');
+        showAlert('SYSTEMS RECOVERED', '✔ All values nominal. Mission resumed.', 'ok');
+      }
+
+      /* ── Always update cards (even while paused/cooling) ── */
+      updateAllCards(t);
+      updateStatus(data.status);
+      logTelemetry(t, data.status);
+
+      const el = document.getElementById('modeDisplay');
+      if(el) el.textContent = 'MODE: ' + data.mode;
+
+      /* ── Charts only update when running ── */
+      if(!simPaused){
+        Object.keys(t).forEach(k => pushChart(k, t[k]));
+      }
+
+      /* ── Predictions ── */
+      if(!simPaused){
+        const pm = {
+          fuel:t.fuel-5, temp:t.temp+3, voltage:t.voltage-1,
+          battery:t.battery-3, deviation:t.deviation+0.2,
+          radiation:t.radiation+2, oxygen:t.oxygen-4
+        };
+        Object.keys(pm).forEach(k => {
+          const pEl = document.getElementById('p-'+k);
+          if(pEl) pEl.textContent = Math.max(pm[k],0).toFixed(k==='deviation'?3:2);
+        });
+      }
+    })
+    .catch(() => {
+      if(firstPoll) addLog('Server not reachable', 'danger');
+    });
+}
+
+setInterval(poll, 1500);
+poll();
+</script>
+</body>
+</html>
